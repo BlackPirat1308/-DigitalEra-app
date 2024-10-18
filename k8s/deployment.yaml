@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: digitalera
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: digitalera
+  template:
+    metadata:
+      labels:
+        app: digitalera
+    spec:
+      containers:
+      - name: digitalera
+        image: digitalera:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: digitalera-secrets
+              key: mongodb-uri
+        - name: POSTGRES_URI
+          valueFrom:
+            secretKeyRef:
+              name: digitalera-secrets
+              key: postgres-uri
+        - name: COINPAYMENTS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: digitalera-secrets
+              key: coinpayments-key
+        - name: COINPAYMENTS_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: digitalera-secrets
+              key: coinpayments-secret
+        resources:
+          limits:
+            cpu: "0.5"
+            memory: "512Mi"
+          requests:
+            cpu: "0.25"
+            memory: "256Mi"
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: digitalera-service
+spec:
+  selector:
+    app: digitalera
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer

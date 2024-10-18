@@ -1,0 +1,39 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  DOCKER_REGISTRY: ${CI_REGISTRY}
+
+test:
+  stage: test
+  image: node:18-alpine
+  script:
+    - npm ci
+    - npm run lint
+    - npm test
+  artifacts:
+    reports:
+      junit: junit.xml
+
+build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t $DOCKER_REGISTRY/digitalera:$CI_COMMIT_SHA .
+    - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin $DOCKER_REGISTRY
+    - docker push $DOCKER_REGISTRY/digitalera:$CI_COMMIT_SHA
+
+deploy:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  script:
+    - echo "$KUBE_CONFIG" | base64 -d > kubeconfig
+    - export KUBECONFIG=./kubeconfig
+    - sed -i "s|image: digitalera:latest|image: $DOCKER_REGISTRY/digitalera:$CI_COMMIT_SHA|" k8s/deployment.yaml
+    - kubectl apply -f k8s/deployment.yaml
+  only:
+    - main
